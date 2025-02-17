@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing as mp
+from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -9,6 +10,49 @@ import seaborn as sns
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt
 from tqdm import tqdm
+
+
+@dataclass(frozen=True)
+class OsrsColors:
+    background: str = "#F5DEB3"  # Wheat background
+    panel: str = "#FFF8DC"  # Cornsilk panel
+    border: str = "#8B7355"  # OSRS brown border
+    text: str = "#2F2F2F"  # Dark grey text
+    highlight: str = "#C17000"  # OSRS gold highlight
+    gold: str = "#FFD700"  # OSRS gold
+    bars: tuple[str, str] = (
+        "#FFD700",
+        "#4682B4",
+    )  # Gold and blue (colorblind-friendly)
+    grid: str = "#DDDDDD"  # Light grey grid
+    error_bars: str = "#8B4513"  # Dark brown for error bars
+
+
+# Replace dictionary with dataclass instance
+OSRS_COLORS = OsrsColors()
+
+
+def apply_osrs_style() -> None:
+    """Apply OSRS-inspired light theme styling to matplotlib plots."""
+    plt.style.use("default")  # Start with light theme
+    plt.rcParams.update(
+        {
+            "figure.facecolor": OSRS_COLORS.background,
+            "axes.facecolor": OSRS_COLORS.panel,
+            "axes.edgecolor": OSRS_COLORS.border,
+            "axes.labelcolor": OSRS_COLORS.text,
+            "text.color": OSRS_COLORS.text,
+            "xtick.color": OSRS_COLORS.text,
+            "ytick.color": OSRS_COLORS.text,
+            "grid.color": OSRS_COLORS.grid,
+            "figure.dpi": 300,
+            "axes.grid": True,
+            "grid.alpha": 0.3,
+            "axes.titleweight": "bold",
+            "savefig.facecolor": OSRS_COLORS.background,
+            "figure.frameon": True,
+        }
+    )
 
 
 class Item(BaseModel):
@@ -31,7 +75,9 @@ def read_data(file_path: str | Path) -> pd.DataFrame:
         items_data = df.to_dict("records")
 
         # Validate with Pydantic
-        validated_data = ItemCollection(items=[Item(**{str(k): v for k, v in item.items()}) for item in items_data])
+        validated_data = ItemCollection(
+            items=[Item(**{str(k): v for k, v in item.items()}) for item in items_data]
+        )
 
         # Convert back to DataFrame
         return pd.DataFrame([item.model_dump() for item in validated_data.items])
@@ -55,7 +101,10 @@ def simulate_searches(df: pd.DataFrame, seed: int) -> int:
     np.random.seed(seed)
     searches: int = 1  # Start at 1 to ensure we never return 0
     items_collected: dict[str, int] = {item_id: 0 for item_id in df["item_id"]}
-    while any(items_collected[item_id] < received for item_id, received in zip(df["item_id"], df["received"])):
+    while any(
+        items_collected[item_id] < received
+        for item_id, received in zip(df["item_id"], df["received"])
+    ):
         for item_id, drop_rate in zip(df["item_id"], df["drop_rate"]):
             if np.random.random() < drop_rate:
                 items_collected[item_id] += 1
@@ -64,7 +113,9 @@ def simulate_searches(df: pd.DataFrame, seed: int) -> int:
     return searches
 
 
-def calculate_dryness_for_item(item_id: str, drop_rate: float, num_simulations: int) -> tuple[str, float]:
+def calculate_dryness_for_item(
+    item_id: str, drop_rate: float, num_simulations: int
+) -> tuple[str, float]:
     """Calculate dryness for a single item through simulation.
 
     Args:
@@ -108,7 +159,9 @@ def simulate_searches_multi(df: pd.DataFrame, num_simulations: int) -> list[int]
     return results
 
 
-def calculate_dryness(df: pd.DataFrame, total_searches: float) -> str | dict[str, float]:
+def calculate_dryness(
+    df: pd.DataFrame, total_searches: float
+) -> str | dict[str, float]:
     """Calculate dryness for items with 0 drops.
 
     Args:
@@ -181,124 +234,191 @@ def plot_results(
     dryness_results: dict[str, float],
     output_dir: Path | str = "plots",
 ) -> None:
-    """Generate and save analysis plots."""
+    """Generate and save analysis plots as a single combined figure."""
     plots_dir = Path(output_dir)
     try:
         plots_dir.mkdir(exist_ok=True, parents=True)
     except PermissionError:
         raise PermissionError(f"Cannot create plots directory at {plots_dir}")
 
-    # Plot 1: Distribution of simulated searches
-    plt.figure(figsize=(12, 6))
-    sns.histplot(simulated_searches, kde=True)
-    plt.title("Distribution of Simulated Searches")
-    plt.xlabel("Number of Searches")
-    plt.axvline(float(np.mean(simulated_searches)), color="r", linestyle="--", label="Mean")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(plots_dir / "search_distribution.png", dpi=300)
-    plt.close()
+    apply_osrs_style()
 
-    # Plot 2: Expected vs Actual drops with error bars
-    plt.figure(figsize=(15, 8))
-    sns.set_style("whitegrid")
-    sns.set_palette("husl")
+    # Calculate figure size for 9:16 aspect ratio
+    width = 16  # inches
+    height = width * (16 / 9)  # maintains 9:16 ratio
 
+    # Create figure with GridSpec
+    fig = plt.figure(figsize=(width, height))
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.2, 1])
+
+    # Increase default font sizes
+    plt.rc("font", size=14)  # controls default text size
+    plt.rc("axes", titlesize=24)  # fontsize of the title
+    plt.rc("axes", labelsize=16)  # fontsize of the x and y labels
+    plt.rc("xtick", labelsize=18)  # fontsize of the x tick labels
+    plt.rc("ytick", labelsize=14)  # fontsize of the y tick labels
+    plt.rc("legend", fontsize=14)  # fontsize of the legend
+
+    # Create subplots
+    ax1 = fig.add_subplot(gs[0, :])  # Expected vs Actual (spans both columns)
+    ax2 = fig.add_subplot(gs[1, 0])  # Search Distribution
+    ax3 = fig.add_subplot(gs[1, 1])  # Dryness Analysis
+
+    # Expected vs Actual Plot (ax1)
+    ax1.set_facecolor(OSRS_COLORS.panel)
     x = np.arange(len(df))
     expected_drops = total_searches * df["drop_rate"]
     lower_ci, upper_ci = calculate_bootstrap_errors(df)
 
-    # Plot bars first
-    plt.bar(
+    ax1.bar(
         x - 0.2,
         expected_drops,
         width=0.4,
         label="Expected",
-        color=sns.color_palette("husl")[0],
-        alpha=0.7,
+        color=OSRS_COLORS.gold,
+        alpha=0.9,
     )
-    plt.bar(
+    for i, v in enumerate(expected_drops):
+        ax1.text(
+            x[i] - 0.2,
+            v + 0.5,
+            f"{v:.0f}",
+            ha="center",
+            va="bottom",
+            color=OSRS_COLORS.text,
+            fontweight="bold",
+            fontsize=16,
+        )
+
+    ax1.bar(
         x + 0.2,
         df["received"],
         width=0.4,
         label="Actual",
-        color=sns.color_palette("husl")[1],
-        alpha=0.7,
+        color=OSRS_COLORS.bars[1],
+        alpha=0.9,
     )
 
-    # Calculate error bar heights (ensure they're non-negative)
+    # Error bars logic for non-zero values
+    zero_mask = df["received"] == 0
+    non_zero_mask = ~zero_mask
     yerr = np.array(
         [
-            np.maximum(0, df["received"] - lower_ci),  # lower errors
-            np.maximum(0, upper_ci - df["received"]),  # upper errors
+            np.maximum(0, df.loc[non_zero_mask, "received"] - lower_ci[non_zero_mask]),
+            np.maximum(0, upper_ci[non_zero_mask] - df.loc[non_zero_mask, "received"]),
         ]
     )
 
-    # Add error bars to the actual values
-    plt.errorbar(
-        x + 0.2,  # Changed from x - 0.2 to x + 0.2 to align with "Actual" bars
-        df["received"],  # Changed from expected_drops to df["received"]
+    ax1.errorbar(
+        x[non_zero_mask] + 0.2,
+        df.loc[non_zero_mask, "received"],
         yerr=yerr,
         fmt="none",
-        color="black",
-        alpha=0.3,
+        color=OSRS_COLORS.error_bars,
+        alpha=0.6,
         capsize=5,
+        capthick=2,
+        elinewidth=2,
     )
 
-    # Customize appearance
-    plt.xticks(x, df["item_id"].tolist(), rotation=45, ha="right")
-    plt.title("Expected vs Actual Drops\nwith 95% Confidence Intervals", pad=20, fontsize=14)
-    plt.xlabel("Items", fontsize=12, labelpad=10)
-    plt.ylabel("Number of Drops", fontsize=12, labelpad=10)
+    # Value labels
+    for i, v in enumerate(df["received"]):
+        x_pos = x[i] + 0.2
+        y_pos = -0.5 if v == 0 else v + (upper_ci[i] - df["received"].iloc[i]) + 0.5
+        va = "top" if v == 0 else "bottom"
+        ax1.text(
+            x_pos,
+            y_pos,
+            f"{v}",
+            ha="center",
+            va=va,
+            color=OSRS_COLORS.text,
+            fontweight="bold",
+            fontsize=14,
+        )
 
-    # Add legend with custom styling
-    legend = plt.legend(frameon=True, facecolor="white", framealpha=1)
-    frame = legend.get_frame()
-    frame.set_edgecolor("black")
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(df["item_id"].tolist(), rotation=45, ha="right")
+    ax1.set_title("Expected vs Actual Drops", pad=20, fontsize=24)
+    ax1.legend(facecolor=OSRS_COLORS.panel, edgecolor=OSRS_COLORS.border)
+    ax1.grid(True, alpha=0.2, color=OSRS_COLORS.grid)
 
-    # Adjust layout
-    plt.tight_layout()
-    plt.savefig(plots_dir / "expected_vs_actual.png", dpi=300, bbox_inches="tight")
-    plt.close()
+    # Search Distribution Plot (ax2)
+    ax2.set_facecolor(OSRS_COLORS.panel)
+    sns.histplot(
+        data=simulated_searches,
+        kde=True,
+        color=OSRS_COLORS.gold,
+        line_kws={"color": OSRS_COLORS.highlight, "alpha": 0.8, "linewidth": 2},
+        ax=ax2,
+    )
+    ax2.axvline(
+        float(np.mean(simulated_searches)),
+        color=OSRS_COLORS.highlight,
+        linestyle="--",
+        label="Average",
+        alpha=0.8,
+        linewidth=2,
+    )
+    ax2.set_title("Drop Rate Simulation Distribution", pad=20, fontsize=24)
+    ax2.set_xlabel("Number of Searches Required")
+    ax2.set_ylabel("Frequency")
+    ax2.legend(facecolor=OSRS_COLORS.background, edgecolor=OSRS_COLORS.border)
+    ax2.grid(True, alpha=0.3, color=OSRS_COLORS.grid)
 
-    # Plot 3: Dryness Analysis
+    # Dryness Analysis Plot (ax3)
     dry_items = df[df["received"] == 0]
     if not dry_items.empty:
-        plt.figure(figsize=(10, 6))
-
-        # Create DataFrame for plotting
+        ax3.set_facecolor(OSRS_COLORS.panel)
         plot_data = pd.DataFrame(
             {
                 "Item": list(dryness_results.keys()),
                 "Times Over Rate": list(dryness_results.values()),
             }
+        ).sort_values("Times Over Rate", ascending=True)
+
+        bars = ax3.barh(
+            plot_data["Item"],
+            plot_data["Times Over Rate"],
+            color=OSRS_COLORS.gold,
+            alpha=0.9,
+        )
+        ax3.axvline(
+            x=1,
+            color="black",
+            linestyle="--",
+            alpha=0.7,
+            label="Expected Rate",
+            linewidth=2,
         )
 
-        # Sort by dryness
-        plot_data = plot_data.sort_values("Times Over Rate", ascending=True)
+        # Add value labels
+        for bar in bars:
+            width = bar.get_width()
+            x_pos = width - (width * 0.05)
+            ax3.text(
+                x_pos,
+                bar.get_y() + bar.get_height() / 2,
+                f"{width:.1f}x",
+                ha="right",
+                va="center",
+                color="black",
+                fontweight="bold",
+                fontsize=18,
+            )
 
-        # Create horizontal bar plot
-        ax = sns.barplot(data=plot_data, y="Item", x="Times Over Rate", palette="YlOrRd", orient="h")
+        ax3.set_title("Dry Items Analysis", pad=20, fontsize=24)
+        ax3.set_xlabel("Times Over Expected Drop Rate")
+        ax3.set_ylabel("Item")
 
-        # Add vertical line for expected rate
-        plt.axvline(x=1, color="blue", linestyle="--", alpha=0.5, label="Expected Rate")
-
-        # Add value labels on the bars
-        for i, v in enumerate(plot_data["Times Over Rate"]):
-            ax.text(v, i, f"{v:.1f}x", va="center", fontweight="bold")
-
-        plt.title("Dryness Analysis\n(Higher = More Unlucky)", pad=20)
-        plt.xlabel("Times Over Expected Drop Rate")
-        plt.ylabel("Item")
-
-        # Adjust layout and save
-        plt.tight_layout()
-        plt.savefig(
-            plots_dir / "dryness_analysis.png",
-            dpi=300,
-            bbox_inches="tight",
-        )
-        plt.close()
+    plt.tight_layout(pad=3.0)
+    fig.savefig(
+        plots_dir / "combined_analysis.png",
+        facecolor=OSRS_COLORS.background,
+        bbox_inches="tight",
+        dpi=400,
+    )
+    plt.close()
 
 
 def main() -> None:
@@ -341,21 +461,29 @@ def main() -> None:
 
         # Print results
         print(f"\nEstimated total searches: {total_searches:,.0f}")
-        print(f"90% confidence interval: [{confidence_interval[0]:,.0f}, {confidence_interval[1]:,.0f}]")
+        print(
+            f"90% confidence interval: [{confidence_interval[0]:,.0f}, {confidence_interval[1]:,.0f}]"
+        )
         print("\nDryness analysis for items not yet received:")
         if isinstance(dryness, dict):
             for item_id, times_over in dryness.items():
-                item_drop_rate = float(df.loc[df["item_id"] == item_id, "drop_rate"].iloc[0])
+                item_drop_rate = float(
+                    df.loc[df["item_id"] == item_id, "drop_rate"].iloc[0]
+                )
                 expected_drops = total_searches * item_drop_rate
                 prob_zero = (1 - item_drop_rate) ** total_searches
                 print(f"{item_id}:")
-                print(f"  Expected drops after {total_searches:.0f} searches: {expected_drops:.2f}")
+                print(
+                    f"  Expected drops after {total_searches:.0f} searches: {expected_drops:.2f}"
+                )
                 print("  Actual drops: 0")
                 print(f"  Probability of being this dry: {prob_zero:.20f}")
                 print(f"  Times over expected rate: {times_over:.2f}x")
 
         # Plot results with custom output directory
-        plot_results(df, simulated_searches, total_searches, dryness_results, args.output_dir)
+        plot_results(
+            df, simulated_searches, total_searches, dryness_results, args.output_dir
+        )
         print(f"\nPlots have been saved to the '{args.output_dir}' directory.")
 
     except Exception as e:
