@@ -1,0 +1,126 @@
+[project]
+dependencies = [
+  "matplotlib>=3.10.0",
+  "numpy>=2.2.3",
+  "pandas>=2.2.3",
+  "pydantic>=2.10.6",
+  "seaborn>=0.13.2",
+  "tqdm>=4.67.1",
+]
+description = "Runescape simulations for chunkvarl"
+name = "chunkvarl"
+readme = "README.md"
+requires-python = ">=3.12"
+version = "0.1.0"
+
+[project.scripts]
+calcdry = "chunkvarl.calc_dry:main"
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+addopts = """
+    -n auto
+    --color=yes
+"""
+log_cli = true
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_level = "INFO"
+markers = [
+  "unit: marks tests as unit tests",
+  "ci: marks tests as continuous integration tests",
+  "slow: marks tests as slow",
+]
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+
+[tool.ruff]
+extend-select = ["E", "F"]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = [
+  "D", # ignore all docstring rules
+]
+select = [
+  "E", # pycodestyle errors
+  "F", # pyflakes
+  "I", # isort
+  "N", # pep8-naming
+  "UP", # pyupgrade
+  "RUF", # ruff-specific
+  "PTH", # use pathlib
+  "SIM", # simplify
+  "TID", # tidy imports
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+  "ANN", # ignore type annotations in tests
+  "S101", # ignore assert statements in tests
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["chunkvarl"]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+
+[tool.ruff.format]
+indent-style = "space"
+line-ending = "auto"
+quote-style = "double"
+skip-magic-trailing-comma = false
+
+[tool.flake8]
+max-line-length = 120
+
+[tool.mypy]
+disable_error_code = ["misc", "attr-defined"]
+ignore_missing_imports = true
+strict = true
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+check_untyped_defs = false
+disable_error_code = [
+  "no-untyped-def",
+  "no-untyped-call",
+  "union-attr",
+  "type-arg",
+  "arg-type",
+  "index",
+  "operator",
+]
+
+# Other settings for strict type checking
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = false
+module = "tests.*"
+no_implicit_optional = true
+strict = false
+warn_no_return = true
+warn_return_any = false
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[dependency-groups]
+dev = [
+  "mypy>=1.15.0",
+  "pytest-xdist>=3.6.1",
+  "pytest>=8.3.4",
+  "ruff>=0.9.6",
+  "pytest-cov>=6.0.0",
+  "invoke>=2.2.0",
+]
+
+[tool.pyright]
+ignore = [
+  "reportUnknownMemberType",
+]

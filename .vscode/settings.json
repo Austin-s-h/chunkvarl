@@ -1,0 +1,38 @@
+{
+    "[python]": {
+        "editor.tabSize": 4,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+        },
+        "editor.defaultFormatter": "ms-python.black-formatter", // Change to Black
+        "editor.rulers": [
+            120
+        ], // Add visual ruler at 120
+        "editor.wordWrapColumn": 120 // Set word wrap to 120
+    },
+    // Python environment settings
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.diagnosticMode": "workspace",
+    // Mypy settings
+    "mypy.enabled": true,
+    "mypy.dmypyExecutable": ".venv/bin/dmypy",
+    "mypy.runUsingActiveInterpreter": true,
+    "mypy.configFile": "pyproject.toml",
+    // Linting and testing
+    "ruff.configuration": "${workspaceFolder}/pyproject.toml",
+    "ruff.lineLength": 120,
+    "flake8.args": [
+        "--max-line-length=120"
+    ],
+    "python.languageServer": "Pylance",
+    "python.testing.pytestArgs": [
+        "tests",
+        "-v",
+        "--cache-clear"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+}
