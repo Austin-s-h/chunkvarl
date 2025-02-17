@@ -252,12 +252,12 @@ def plot_results(
     gs = fig.add_gridspec(2, 2, height_ratios=[1.2, 1])
 
     # Increase default font sizes
-    plt.rc("font", size=14)  # controls default text size
+    plt.rc("font", size=18)  # controls default text size
     plt.rc("axes", titlesize=24)  # fontsize of the title
-    plt.rc("axes", labelsize=16)  # fontsize of the x and y labels
+    plt.rc("axes", labelsize=18)  # fontsize of the x and y labels
     plt.rc("xtick", labelsize=18)  # fontsize of the x tick labels
-    plt.rc("ytick", labelsize=14)  # fontsize of the y tick labels
-    plt.rc("legend", fontsize=14)  # fontsize of the legend
+    plt.rc("ytick", labelsize=18)  # fontsize of the y tick labels
+    plt.rc("legend", fontsize=18)  # fontsize of the legend
 
     # Create subplots
     ax1 = fig.add_subplot(gs[0, :])  # Expected vs Actual (spans both columns)
