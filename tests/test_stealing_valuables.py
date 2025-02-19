@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from chunkvarl.calc_dry import (
+from chunkvarl.stealing_valuables import (
     calculate_bootstrap_errors,
     calculate_dryness,
     plot_results,  # Add this import
@@ -38,7 +38,7 @@ def test_simulate_searches(sample_df):
     """Test single simulation run."""
     searches = simulate_searches(sample_df, seed=42)
     assert isinstance(searches, int)
-    assert searches > 0
+    assert searches >= 1  # Changed to >= 1 since we always do at least one search
 
 
 def test_calculate_dryness(sample_df):
@@ -64,7 +64,7 @@ def test_simulate_searches_multi(sample_df):
     results = simulate_searches_multi(sample_df, num_simulations)
     assert len(results) == num_simulations
     assert all(isinstance(x, int) for x in results)
-    assert all(x > 0 for x in results)
+    assert all(x >= 1 for x in results)  # Changed to >= 1 since we always do at least one search
 
 
 def test_invalid_drop_rates():
@@ -129,9 +129,7 @@ def test_plot_results(sample_df, tmp_path):
 
     plot_results(sample_df, simulated_searches, total_searches, dryness_results, output_dir)
 
-    assert (output_dir / "search_distribution.png").exists()
-    assert (output_dir / "expected_vs_actual.png").exists()
-    assert (output_dir / "dryness_analysis.png").exists()
+    assert (output_dir / "combined_analysis.png").exists()
 
 
 def test_plot_results_permission_error(sample_df, tmp_path):
@@ -149,3 +147,5 @@ def test_empty_dataframe():
     empty_df = pd.DataFrame(columns=["item_id", "drop_rate", "received"])
     with pytest.raises(ValueError, match="DataFrame is empty"):
         calculate_dryness(empty_df, 100)
+
+

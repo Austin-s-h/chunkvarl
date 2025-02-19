@@ -12,10 +12,10 @@ description = "Runescape simulations for chunkvarl"
 name = "chunkvarl"
 readme = "README.md"
 requires-python = ">=3.12"
-version = "0.1.0"
+version = "0.2.0"
 
 [project.scripts]
-calcdry = "chunkvarl.calc_dry:main"
+simsteal = "chunkvarl.stealing_valuables:main"
 
 [tool.uv]
 package = true
