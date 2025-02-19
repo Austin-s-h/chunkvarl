@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 
 class RarityTier(Enum):
     """OSRS item rarity tiers."""
-    COMMON = ("common", "#45B6FE")      # Light Blue (instead of white)
+
+    COMMON = ("common", "#45B6FE")  # Light Blue (instead of white)
     UNCOMMON = ("uncommon", "#00FF00")  # Green
-    RARE = ("rare", "#0000FF")         # Blue
+    RARE = ("rare", "#0000FF")  # Blue
     VERY_RARE = ("very_rare", "#800080")  # Purple
     ULTRA_RARE = ("ultra_rare", "#FF0000")  # Red
 
@@ -40,13 +41,13 @@ class OsrsColors:
 
     def get_rarity_tier(self, drop_rate: float) -> RarityTier:
         """Get rarity tier based on drop rate."""
-        if drop_rate > 1/10:  # > 1/10
+        if drop_rate > 1 / 10:  # > 1/10
             return RarityTier.COMMON
-        elif drop_rate > 1/100:  # 1/10 - 1/100
+        elif drop_rate > 1 / 100:  # 1/10 - 1/100
             return RarityTier.UNCOMMON
-        elif drop_rate > 1/1000:  # 1/100 - 1/1000
+        elif drop_rate > 1 / 1000:  # 1/100 - 1/1000
             return RarityTier.RARE
-        elif drop_rate > 1/5000:  # 1/1000 - 1/5000
+        elif drop_rate > 1 / 5000:  # 1/1000 - 1/5000
             return RarityTier.VERY_RARE
         else:  # ≤ 1/5000
             return RarityTier.ULTRA_RARE

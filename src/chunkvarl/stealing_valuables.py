@@ -158,11 +158,6 @@ def calculate_dryness(df: pd.DataFrame, total_searches: float) -> str | dict[str
     dry_items = df[df["received"] == 0]
     if dry_items.empty:
         return "No items with a value of 0 in your data."
-
-    # Total probability of getting any item
-    total_drop_rate = df["drop_rate"].sum()
-    null_prob = 1 - total_drop_rate
-
     results = {}
     for _, row in dry_items.iterrows():
         p = row["drop_rate"]
@@ -171,10 +166,6 @@ def calculate_dryness(df: pd.DataFrame, total_searches: float) -> str | dict[str
         # Variance for geometric distribution with null probability
         variance = (1 - p) / (p**2)
         std_dev = np.sqrt(variance)
-
-        # Probability of being this dry (zero drops in total_searches)
-        prob_zero = (1 - p) ** total_searches
-
         # Calculate how many standard deviations from mean
         times_over_rate = (total_searches - expected_attempts) / std_dev
         results[row["item_id"]] = max(times_over_rate, 0)
@@ -218,6 +209,12 @@ def calculate_current_dryness_percentile(simulated_searches: list[int], total_se
     """Calculate what percentile of dryness the current total_searches represents."""
     return sum(1 for x in simulated_searches if x <= total_searches) / len(simulated_searches) * 100
 
+
+def get_percentile_searches(simulated_searches: list[int], percentile: float = 99.9) -> float:
+    """Calculate the Nth percentile of simulated searches."""
+    return float(np.percentile(simulated_searches, percentile))
+
+
 def plot_results(
     df: pd.DataFrame,
     simulated_searches: list[int],
@@ -255,28 +252,15 @@ def plot_results(
     ax2 = fig.add_subplot(gs[1, 0])  # Search Distribution
     ax3 = fig.add_subplot(gs[1, 1])  # Dryness Analysis
 
-    # Calculate dryness colors
-    def get_dryness_color(actual: float, expected: float, lower: float, upper: float) -> tuple[float, float, float]:
-        if actual == 0:
-            # Red for dry items, darker red for more significantly dry
-            dryness = (expected - 0) / expected
-            return (min(1.0, 0.4 + dryness * 0.6), 0.0, 0.0)  # Varying shades of red
-        elif actual < expected:
-            # Yellow to red gradient for below expected
-            ratio = actual / expected
-            return (1.0, ratio, 0.0)  # Yellow to red
-        else:
-            # Green for above expected, brighter green for luckier
-            luck = min((actual - expected) / (upper - expected) if upper > expected else 0.0, 1.0)
-            return (0.0, min(0.8 + luck * 0.2, 1.0), 0.0)  # Varying shades of green
-
     # Sort items by rarity (drop rate)
     df = df.sort_values(by="drop_rate", ascending=True).reset_index(drop=True)
 
     # Expected vs Actual Plot (ax1)
     ax1.set_facecolor(OSRS_COLORS.panel)
     x = np.arange(len(df))
-    expected_drops = total_searches * df["drop_rate"]
+    # Use 99.9th percentile for expected drops calculation
+    percentile_searches = get_percentile_searches(simulated_searches)
+    expected_drops = percentile_searches * df["drop_rate"]
     lower_ci, upper_ci = calculate_bootstrap_errors(df)
 
     param_text = (
@@ -284,6 +268,7 @@ def plot_results(
         f"Total Simulations: {len(simulated_searches):,}\n"
         f"Total Drop Rate: {df['drop_rate'].sum():.4f}\n"
         f"Avg. Searches: {total_searches:,.0f}\n"
+        f"99.9%ile Searches: {percentile_searches:,.0f}\n"
         f"Items Tracked: {len(df)}"
     )
 
@@ -401,50 +386,57 @@ def plot_results(
             ),
         )
 
+    def round_to_25(rate: float) -> int:
+        """Round a rate (1/x) to nearest 25."""
+        x = 1 / rate if rate > 0 else float('inf')
+        return int(round(x / 25) * 25)
+
     # Add colored rectangles and drop rate annotations
-    for i, (drop_rate, item_id) in enumerate(zip(df["drop_rate"], df["item_id"])):
-        # Get rarity color based on drop rate
-        rarity_color = OSRS_COLORS.get_rarity_tier(drop_rate).color
+    for i, (drop_rate, item_id, actual) in enumerate(zip(df["drop_rate"], df["item_id"], df["received"])):
+        # Define positions and sizes for box
+        box_width = 0.8
+        box_height = max_height * 0.06
+        box_x = i - 0.4
+        
+        # Draw and label drop rate box
+        drop_rate_y = -max_height * 0.08
+        drop_rate_label_y = -max_height * 0.05
+        ax1.add_patch(plt.Rectangle(
+            (box_x, drop_rate_y), box_width, box_height,
+            facecolor=OSRS_COLORS.get_rarity_tier(drop_rate).color,
+            alpha=0.3, edgecolor=OSRS_COLORS.border, linewidth=1
+        ))
+        
+        # Calculate actual rate
+        actual_rate = actual / total_searches if total_searches > 0 else 0
+        
+        # Add both rates in a single text element
+        rate_text = f"1/{round_to_25(drop_rate):,}\n"
+        rate_text += f"1/{round_to_25(actual_rate):,}" if actual > 0 else "No drops"
+        
+        ax1.text(i, drop_rate_label_y, 
+                rate_text,
+                ha="center", va="center", color=OSRS_COLORS.text,
+                fontsize=10, fontweight="bold",
+                style='normal',  # Only the second line will be italic due to markdown-style underscores
+                multialignment='center')
 
-        # Add background rectangle
-        rect = plt.Rectangle(
-            (i - 0.4, -max_height * 0.08),
-            0.8,
-            max_height * 0.06,
-            facecolor=rarity_color,
-            alpha=0.3,
-            edgecolor=OSRS_COLORS.border,
-            linewidth=1,
-        )
-        ax1.add_patch(rect)
+    # Adjust y-axis limit for the single box
+    ax1.set_ylim(bottom=-max_height * 0.15, top=max_height * 1.15)
 
-        # Add the drop rate text
-        ax1.text(
-            i,
-            -max_height * 0.05,
-            f"1/{1 / drop_rate:.0f}",
-            ha="center",
-            va="center",
-            color=OSRS_COLORS.text,
-            fontsize=10,
-            fontweight="bold",
-            bbox=dict(facecolor="none", edgecolor="none", pad=2),
-        )
-
-    # Adjust y-axis limit to accommodate colored rectangles
-    ax1.set_ylim(bottom=-max_height * 0.10 if any(df["received"] == 0) else -max_height * 0.1, top=max_height * 1.15)
-
-    # Modify the x-axis label settings for better alignment
+    # Adjust positions for item names
+    ax1.set_ylim(bottom=-max_height * 0.22, top=max_height * 1.15)  # Increase bottom margin
     ax1.set_xticks(x)
     ax1.set_xticklabels(
         df["item_id"].tolist(),
         rotation=45,
         ha="right",
-        va="top",  # Add vertical alignment
+        va="top",
     )
-    # Add padding to prevent label overlap
-    ax1.tick_params(axis="x", pad=10)
+    ax1.tick_params(axis="x", pad=25)  # Increase padding for labels
 
+    # Adjust y-axis limit to accommodate colored rectangles
+    ax1.set_ylim(bottom=-max_height * 0.10, top=max_height * 1.15)
     ax1.set_xticks(x)
     ax1.set_xticklabels(df["item_id"].tolist(), rotation=45, ha="right")
     ax1.set_title("Expected vs Actual Drops", pad=20, fontsize=24)
@@ -452,22 +444,23 @@ def plot_results(
 
     # Search Distribution Plot (ax2) - Modified
     ax2.set_facecolor(OSRS_COLORS.panel)
-    
-    # Calculate current dryness percentile
+    # Calculate current dryness percentile and 99.9th percentile
     current_percentile = calculate_current_dryness_percentile(simulated_searches, total_searches)
+    percentile_99_9 = get_percentile_searches(simulated_searches)
     
-    # Plot histogram with KDE
+    # Plot histogram with KDE, but don't include in legend
     sns.histplot(
         data=simulated_searches,
         kde=True,
         color=OSRS_COLORS.gold,
         line_kws={"color": OSRS_COLORS.highlight, "alpha": 0.8, "linewidth": 3},
         ax=ax2,
+        label=None  # This prevents the empty box in legend
     )
 
-    # Add mean and current position lines
+    # Add mean and 99.9th percentile lines
     mean_val = float(np.mean(simulated_searches))
-    ax2.axvline(
+    mean_line = ax2.axvline(
         mean_val,
         color=OSRS_COLORS.dashed_lines,
         linestyle="--",
@@ -475,16 +468,25 @@ def plot_results(
         alpha=0.8,
         linewidth=3,
     )
-    
-    # Add current position line
-    ax2.axvline(
-        total_searches,
-        color='red',
-        linestyle='-',
-        label=f'Current ({current_percentile:.1f}%ile)',
+
+    # Add 99.9th percentile line
+    percentile_line = ax2.axvline(
+        percentile_99_9,
+        color="red",
+        linestyle="-",
+        label="99.9th Percentile",
         alpha=0.8,
         linewidth=3,
     )
+
+    # Set legend with only the lines we want
+    ax2.legend(handles=[mean_line, percentile_line], 
+              facecolor=OSRS_COLORS.panel,
+              edgecolor=OSRS_COLORS.border,
+              framealpha=0.8)
+
+    # Add title
+    ax2.set_title("Search Distribution", pad=20, fontsize=24)
 
     # Update stats text to include current position
     mean_searches = float(np.mean(simulated_searches))
@@ -492,11 +494,11 @@ def plot_results(
     stats_text = (
         f"Distribution Statistics:\n"
         f"Mean: {mean_searches:,.0f}\n"
-        f"Current: {total_searches:,.0f}\n"
         f"Percentile: {current_percentile:.1f}%\n"
         f"Std Dev: {std_searches:,.0f}\n"
         f"5th %ile: {np.percentile(simulated_searches, 5):,.0f}\n"
-        f"95th %ile: {np.percentile(simulated_searches, 95):,.0f}"
+        f"95th %ile: {np.percentile(simulated_searches, 95):,.0f}\n"
+        f"99.9th %ile: {get_percentile_searches(simulated_searches):,.0f}"
     )
 
     ax2.text(
@@ -515,11 +517,28 @@ def plot_results(
     dry_items = df[df["received"] == 0]
     if not dry_items.empty:
         ax3.set_facecolor(OSRS_COLORS.panel)
+
+        # Validate dryness results against DataFrame
+        valid_dryness_items = {item: value for item, value in dryness_results.items() if item in df["item_id"].values}
+
+        if not valid_dryness_items:
+            # If no valid items, skip the dryness plot
+            ax3.text(
+                0.5,
+                0.5,
+                "No valid dry items to display",
+                ha="center",
+                va="center",
+                color=OSRS_COLORS.text,
+                fontsize=14,
+            )
+            return
+
         plot_data = pd.DataFrame(
             {
-                "Item": list(dryness_results.keys()),
-                "Times Over Rate": list(dryness_results.values()),
-                "Drop Rate": [df.loc[df["item_id"] == item, "drop_rate"].iloc[0] for item in dryness_results],
+                "Item": list(valid_dryness_items.keys()),
+                "Times Over Rate": list(valid_dryness_items.values()),
+                "Drop Rate": [df.loc[df["item_id"] == item, "drop_rate"].iloc[0] for item in valid_dryness_items],
             }
         ).sort_values("Times Over Rate", ascending=True)
 
@@ -566,30 +585,14 @@ def plot_results(
             )
 
         # Add colored rectangles and drop rates to y-axis labels
-        yticks = ax3.get_yticks()
-        ylabels = [plot_data["Item"].iloc[int(i)] for i in range(len(yticks))]
         new_labels = []
-
-        # Add background rectangles for each item
         for i, (item, drop_rate) in enumerate(zip(plot_data["Item"], plot_data["Drop Rate"])):
             # Get rarity color based on drop rate
             rarity_color = OSRS_COLORS.get_rarity_tier(drop_rate).color
-            # Add background rectangle
-            rect = plt.Rectangle(
-                (ax3.get_xlim()[0], i - 0.4),  # Start from left edge
-                ax3.get_xlim()[1] - ax3.get_xlim()[0],  # Span full width
-                0.8,
-                facecolor=rarity_color,
-                alpha=0.1,
-                edgecolor=OSRS_COLORS.border,
-                linewidth=1,
-            )
-            ax3.add_patch(rect)
-
             # Calculate probability of zero drops for this item
             prob_zero = (1 - drop_rate) ** total_searches
             # Create label with drop rate
-            new_labels.append(f"{item}\n(1/{1/drop_rate:.0f}) p₀={prob_zero:.1e}")
+            new_labels.append(f"{item}\n(1/{1 / drop_rate:.0f}) p₀={prob_zero:.1e}")
 
         # Set y-axis ticks and labels
         ax3.set_yticks(range(len(plot_data)))
@@ -656,6 +659,7 @@ def main() -> None:
 
         # Print enhanced results
         print(f"\nEstimated total searches: {total_searches:,.0f}")
+        print(f"99.9th percentile searches: {get_percentile_searches(simulated_searches):,.0f}")
         print(f"90% confidence interval: [{confidence_interval[0]:,.0f}, {confidence_interval[1]:,.0f}]")
         current_percentile = calculate_current_dryness_percentile(simulated_searches, total_searches)
         print(f"Current dryness percentile: {current_percentile:.1f}%")

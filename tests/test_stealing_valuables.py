@@ -138,7 +138,7 @@ def test_plot_results_permission_error(sample_df, tmp_path):
     output_dir.mkdir(mode=0o444)
 
     with pytest.raises(PermissionError):
-        plot_results(sample_df, [100], 100.0, {"item1": 1.5}, output_dir)
+        plot_results(sample_df, [100], 100.0, {"test1": 1.5}, output_dir)
 
 
 def test_empty_dataframe():
@@ -146,5 +146,3 @@ def test_empty_dataframe():
     empty_df = pd.DataFrame(columns=["item_id", "drop_rate", "received"])
     with pytest.raises(ValueError, match="DataFrame is empty"):
         calculate_dryness(empty_df, 100)
-
-
