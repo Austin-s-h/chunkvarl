@@ -36,6 +36,7 @@ class OsrsColors:
     grid: str = "#DDDDDD"  # Light grey grid
     error_bars: str = "#8B4513"  # Dark brown for error bars
     actual_color: str = "#C17000"  # OSRS Gold color for actual bars
+    dashed_lines: str = "#4B0082"  # Dark indigo for dashed lines
 
     def get_rarity_tier(self, drop_rate: float) -> RarityTier:
         """Get rarity tier based on drop rate."""
