@@ -75,17 +75,17 @@ def simulate_searches(df: pd.DataFrame, seed: int) -> int:
     np.random.seed(seed)
     items_collected = {item_id: 0 for item_id in df["item_id"]}
     required_counts = dict(zip(df["item_id"], df["received"]))
-    total_searches = 0
+    
     # Calculate total drop rate (sum of all individual rates)
     total_drop_rate = df["drop_rate"].sum()
     if total_drop_rate > 1:
         raise ValueError("Total drop rate cannot exceed 1.0")
-    # Probability of getting nothing = 1 - sum of all drop rates
-    null_prob = 1 - total_drop_rate
+        
     # Always perform at least one search
     total_searches = 1
+    
     # First search
-    if np.random.random() >= null_prob:
+    if np.random.random() < total_drop_rate:  # Changed from >= null_prob to < total_drop_rate
         normalized_rates = df["drop_rate"] / total_drop_rate
         item_idx = np.random.choice(len(df), p=normalized_rates)
         item_id = df.iloc[item_idx]["item_id"]
@@ -95,8 +95,8 @@ def simulate_searches(df: pd.DataFrame, seed: int) -> int:
     # Continue searching if needed
     while any(items_collected[item] < required_counts[item] for item in items_collected):
         total_searches += 1
-
-        if np.random.random() >= null_prob:
+        
+        if np.random.random() < total_drop_rate:  # Changed here too
             normalized_rates = df["drop_rate"] / total_drop_rate
             item_idx = np.random.choice(len(df), p=normalized_rates)
             item_id = df.iloc[item_idx]["item_id"]
@@ -304,14 +304,6 @@ def plot_results(
         horizontalalignment="left",
     )
 
-    ax1.legend(
-        bbox_to_anchor=(0.02, 0.02),
-        loc="lower left",
-        facecolor=OSRS_COLORS.panel,
-        edgecolor=OSRS_COLORS.border,
-        framealpha=0.8,
-    )
-
     # Plot expected bars
     ax1.bar(x - 0.2, expected_drops, width=0.4, color=OSRS_COLORS.gold, alpha=0.9, label="Expected")
     # Plot actual bars
@@ -327,7 +319,6 @@ def plot_results(
         ]
     )
 
-    # Update error bar style
     ax1.errorbar(
         x[non_zero_mask] + 0.2,
         df.loc[non_zero_mask, "received"],
@@ -418,8 +409,21 @@ def plot_results(
                 rate_text,
                 ha="center", va="center", color=OSRS_COLORS.text,
                 fontsize=10, fontweight="bold",
-                style='normal',  # Only the second line will be italic due to markdown-style underscores
+                style='normal',
                 multialignment='center')
+
+        # Add explanation text for the first item only
+        if i == 0:
+            ax1.text(
+                i, drop_rate_label_y + (box_height * 3),
+                "Drop rates:\nWiki (top)\nObserved (bottom)",
+                ha="left", va="top", color=OSRS_COLORS.text,
+                fontsize=8, style='italic',
+                bbox=dict(facecolor=OSRS_COLORS.panel, 
+                         edgecolor=OSRS_COLORS.border,
+                         alpha=0.7, pad=2,
+                         boxstyle="round,pad=0.2")
+            )
 
     # Adjust y-axis limit for the single box
     ax1.set_ylim(bottom=-max_height * 0.15, top=max_height * 1.15)
